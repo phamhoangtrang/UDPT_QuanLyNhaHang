@@ -1,0 +1,4 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On RewriteBase /admin/ RewriteRule ^dashboard\.php$
+  dashboard.php [L]
+</IfModule>
