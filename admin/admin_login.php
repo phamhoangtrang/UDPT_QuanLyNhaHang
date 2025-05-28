@@ -1,27 +1,33 @@
 <?php
-
+ob_start(); // Add output buffering
 include '../components/connect.php';
 
 session_start();
 
 if (isset($_POST['submit'])) {
-
-   $name = $_POST['name'];
-   $name = filter_var($name, FILTER_SANITIZE_SPECIAL_CHARS);
-   $pass = sha1($_POST['pass']);
-   $pass = filter_var($pass, FILTER_SANITIZE_SPECIAL_CHARS);
-
-   $select_admin = $conn->prepare("SELECT * FROM `admin` WHERE name = ? AND password = ?");
-   $select_admin->execute([$name, $pass]);
-
-   if ($select_admin->rowCount() > 0) {
-      $fetch_admin_id = $select_admin->fetch(PDO::FETCH_ASSOC);
-      $_SESSION['admin_id'] = $fetch_admin_id['id'];
-      header('location:dashboard.php');
+   if (!$db->isServiceAvailable('user')) {
+      $message[] = 'Admin login temporarily unavailable - Service is down';
    } else {
-      $message[] = 'incorrect username or password!';
-   }
+      try {
+         $name = htmlspecialchars($_POST['name'], ENT_QUOTES, 'UTF-8');
+         $pass = sha1(htmlspecialchars($_POST['pass'], ENT_QUOTES, 'UTF-8'));
 
+         $select_admin = $db->getConnection('user')->prepare("SELECT * FROM `admin` WHERE name = ? AND password = ?");
+         $select_admin->execute([$name, $pass]);
+
+         if ($select_admin->rowCount() > 0) {
+            $fetch_admin_id = $select_admin->fetch(PDO::FETCH_ASSOC);
+            $_SESSION['admin_id'] = $fetch_admin_id['id'];
+            header('location:dashboard.php');
+            exit(); // Add exit after redirect
+         } else {
+            $message[] = 'incorrect username or password!';
+         }
+      } catch (PDOException $e) {
+         error_log("Admin login error: " . $e->getMessage());
+         $message[] = 'Login service error, please try again later';
+      }
+   }
 }
 
 ?>
@@ -76,16 +82,17 @@ if (isset($_POST['submit'])) {
 
    <!-- admin login form section ends -->
 
-
-
-
-
-
-
-
-
-
+   <?php if (!$db->isServiceAvailable('user')): ?>
+      <div class="notice">
+         <p>Admin login service is currently unavailable</p>
+         <p>Please try again later</p>
+      </div>
+   <?php endif; ?>
 
 </body>
 
 </html>
+
+<?php
+ob_end_flush(); // End output buffering
+?>

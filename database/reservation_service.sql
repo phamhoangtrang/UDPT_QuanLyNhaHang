@@ -20,3 +20,11 @@ CREATE TABLE `reservations` (
   PRIMARY KEY (`id`),
   FOREIGN KEY (`table_id`) REFERENCES `tables` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Add sample tables
+INSERT INTO `tables` (`table_number`, `capacity`, `status`) VALUES
+(1, 4, 'available'),
+(2, 4, 'available'),
+(3, 6, 'available'),
+(4, 2, 'available'),
+(5, 8, 'available');

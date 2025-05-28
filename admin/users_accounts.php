@@ -53,21 +53,30 @@ if (isset($_GET['delete'])) {
       <div class="box-container">
 
          <?php
-         $select_account = $conn->prepare("SELECT * FROM `users`");
-         $select_account->execute();
-         if ($select_account->rowCount() > 0) {
-            while ($fetch_accounts = $select_account->fetch(PDO::FETCH_ASSOC)) {
-               ?>
-               <div class="box">
-                  <p> user id : <span><?= $fetch_accounts['id']; ?></span> </p>
-                  <p> username : <span><?= $fetch_accounts['name']; ?></span> </p>
-                  <a href="users_accounts.php?delete=<?= $fetch_accounts['id']; ?>" class="delete-btn"
-                     onclick="return confirm('delete this account?');">delete</a>
-               </div>
-               <?php
+         if ($db->isServiceAvailable('user')) {
+            try {
+               $select_users = $db->getConnection('user')->prepare("SELECT * FROM `users`");
+               $select_users->execute();
+               if ($select_users->rowCount() > 0) {
+                  while ($fetch_users = $select_users->fetch(PDO::FETCH_ASSOC)) {
+                     ?>
+                     <div class="box">
+                        <p> user id : <span><?= $fetch_users['id']; ?></span> </p>
+                        <p> username : <span><?= $fetch_users['name']; ?></span> </p>
+                        <a href="users_accounts.php?delete=<?= $fetch_users['id']; ?>" class="delete-btn"
+                           onclick="return confirm('delete this account?');">delete</a>
+                     </div>
+                     <?php
+                  }
+               } else {
+                  echo '<p class="empty">Chưa có tài khoản người dùng nào!</p>';
+               }
+            } catch (PDOException $e) {
+               error_log("User service error: " . $e->getMessage());
+               echo '<p class="empty">Không thể truy cập danh sách người dùng</p>';
             }
          } else {
-            echo '<p class="empty">no accounts available</p>';
+            echo '<p class="empty">Dịch vụ quản lý người dùng tạm thời không khả dụng</p>';
          }
          ?>
 
@@ -76,13 +85,6 @@ if (isset($_GET['delete'])) {
    </section>
 
    <!-- user accounts section ends -->
-
-
-
-
-
-
-
    <!-- custom js file link  -->
    <script src="../js/admin_script.js"></script>
 

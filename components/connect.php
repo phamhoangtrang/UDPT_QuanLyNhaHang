@@ -23,90 +23,112 @@ class DatabaseConnections
 
         while ($retryCount < $this->maxRetries) {
             try {
-                // Test DNS resolution first
-                if (!gethostbyname('content-db')) {
-                    sleep(5);
-                    $retryCount++;
-                    continue;
+                // Thử kết nối từng service riêng biệt
+                $services = [
+                    'user' => ['host' => 'user-db', 'required' => false],
+                    'product' => ['host' => 'product-db', 'required' => false],
+                    'order' => ['host' => 'order-db', 'required' => false],
+                    'content' => ['host' => 'content-db', 'required' => false],
+                    'reservation' => ['host' => 'reservation-db', 'required' => false]
+                ];
+
+                $hasConnection = false;
+                foreach ($services as $service => $config) {
+                    try {
+                        $this->connections[$service] = new PDO(
+                            "mysql:host={$config['host']};dbname={$service}_service;charset=utf8mb4",
+                            'root',
+                            'root',
+                            $options
+                        );
+                        $this->connections[$service]->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                        if ($service === 'user') {
+                            self::$conn = $this->connections[$service];
+                        }
+                        $hasConnection = true;
+                    } catch (PDOException $e) {
+                        error_log("Service $service không khả dụng: " . $e->getMessage());
+                        $this->connections[$service] = null;
+                    }
                 }
 
-                // User service (users, admin)
-                $this->connections['user'] = new PDO(
-                    'mysql:host=user-db;dbname=user_service;charset=utf8mb4',
-                    'root',
-                    'root',
-                    $options
-                );
-                self::$conn = $this->connections['user'];
-
-                // Product service (products)
-                $this->connections['product'] = new PDO(
-                    'mysql:host=product-db;dbname=product_service;charset=utf8mb4',
-                    'root',
-                    'root',
-                    $options
-                );
-
-                // Order service (orders, reservations, tables)
-                $this->connections['order'] = new PDO(
-                    'mysql:host=order-db;dbname=order_service;charset=utf8mb4',
-                    'root',
-                    'root',
-                    $options
-                );
-
-                // Content service (messages, footer)
-                $this->connections['content'] = new PDO(
-                    'mysql:host=content-db;dbname=content_service;charset=utf8mb4',
-                    'root',
-                    'root',
-                    $options
-                );
-
-                // Set error mode cho tất cả connections
-                foreach ($this->connections as $conn) {
-                    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                if ($hasConnection) {
+                    return;
                 }
-                return;
-            } catch (PDOException $e) {
+
                 sleep(5);
                 $retryCount++;
-                if ($retryCount == $this->maxRetries) {
-                    die('Failed to connect after ' . $this->maxRetries . ' attempts: ' . $e->getMessage());
-                }
+            } catch (Exception $e) {
+                sleep(5);
+                $retryCount++;
             }
         }
     }
 
     private function verifyTables()
     {
+        // Verify order tables
         try {
-            // Verify order tables
-            $orderDb = $this->getConnection('order');
-            $orderTables = ['orders', 'tables', 'reservations'];
-            foreach ($orderTables as $table) {
-                $stmt = $orderDb->query("SHOW TABLES LIKE '$table'");
-                if ($stmt->rowCount() == 0) {
-                    $method = 'create' . ucfirst($table);
-                    $this->$method($orderDb);
+            if ($this->isServiceAvailable('order')) {
+                $orderDb = $this->getConnection('order');
+                $orderTables = ['orders', 'tables', 'reservations'];
+                foreach ($orderTables as $table) {
+                    $stmt = $orderDb->query("SHOW TABLES LIKE '$table'");
+                    if ($stmt->rowCount() == 0) {
+                        $method = 'create' . ucfirst($table);
+                        $this->$method($orderDb);
+                    }
                 }
             }
+        } catch (PDOException $e) {
+            error_log("Không thể kiểm tra bảng của Order service: " . $e->getMessage());
+        }
 
-            // Verify product tables
-            $productDb = $this->getConnection('product');
-            $stmt = $productDb->query("SHOW TABLES LIKE 'products'");
-            if ($stmt->rowCount() == 0) {
-                $this->createProducts($productDb);
+        // Verify product tables
+        if ($this->isServiceAvailable('product')) {
+            try {
+                $productDb = $this->getConnection('product');
+                $tables = ['products', 'cart'];
+                foreach ($tables as $table) {
+                    $stmt = $productDb->query("SHOW TABLES LIKE '$table'");
+                    if ($stmt->rowCount() == 0) {
+                        $method = 'create' . ucfirst($table);
+                        $this->$method($productDb);
+                    }
+                }
+            } catch (PDOException $e) {
+                error_log("Product tables verification failed: " . $e->getMessage());
             }
+        }
 
-            // Kiểm tra bảng messages
-            $contentDb = $this->getConnection('content');
-            $stmt = $contentDb->query("SHOW TABLES LIKE 'messages'");
-            if ($stmt->rowCount() == 0) {
-                $this->createContentTables($contentDb);
+        // Verify content tables
+        try {
+            if ($this->isServiceAvailable('content')) {
+                $contentDb = $this->getConnection('content');
+                $stmt = $contentDb->query("SHOW TABLES LIKE 'messages'");
+                if ($stmt->rowCount() == 0) {
+                    $this->createContentTables($contentDb);
+                }
             }
         } catch (PDOException $e) {
-            die('Table verification failed: ' . $e->getMessage());
+            error_log("Không thể kiểm tra bảng của Content service: " . $e->getMessage());
+        }
+
+        // Verify reservation tables
+        try {
+            if ($this->isServiceAvailable('reservation')) {
+                $reservationDb = $this->getConnection('reservation');
+                $tables = ['tables', 'reservations'];
+                foreach ($tables as $table) {
+                    $stmt = $reservationDb->query("SHOW TABLES LIKE '$table'");
+                    if ($stmt->rowCount() == 0) {
+                        $method = 'create' . ucfirst($table);
+                        $this->$method($reservationDb);
+                    }
+                }
+            }
+        } catch (PDOException $e) {
+            error_log("Reservation service error: " . $e->getMessage());
         }
     }
 
@@ -180,9 +202,28 @@ class DatabaseConnections
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     }
 
+    private function createCart($productDb)
+    {
+        $productDb->exec("CREATE TABLE IF NOT EXISTS `cart` (
+            `id` int(100) NOT NULL AUTO_INCREMENT,
+            `user_id` int(100) NOT NULL,
+            `pid` int(100) NOT NULL,
+            `name` varchar(100) NOT NULL,
+            `price` int(10) NOT NULL,
+            `quantity` int(10) NOT NULL,
+            `image` varchar(100) NOT NULL,
+            PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
+
     public function getConnection($service)
     {
         return $this->connections[$service] ?? null;
+    }
+
+    public function isServiceAvailable($service)
+    {
+        return isset($this->connections[$service]) && $this->connections[$service] !== null;
     }
 }
 

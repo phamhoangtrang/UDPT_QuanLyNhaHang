@@ -49,27 +49,11 @@ if (isset($_SESSION['user_id'])) {
          <p><i class="fas fa-envelope"></i><span><?= $fetch_profile['email']; ?></span></p>
          <a href="update_profile.php" class="btn">update info</a>
 
-
       </div>
 
    </section>
 
-
-
-
-
-
-
-
-
-
    <?php include 'components/footer.php'; ?>
-
-
-
-
-
-
 
    <!-- custom js file link  -->
    <script src="js/script.js"></script>

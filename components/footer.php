@@ -1,16 +1,17 @@
 <footer class="footer">
    <section class="grid">
       <?php
-      // Lấy thông tin footer từ cơ sở dữ liệu
-      try {
-         $select_footer = $db->getConnection('content')->prepare("SELECT * FROM `footer` LIMIT 1");
-         $select_footer->execute();
-         $footer_info = $select_footer->fetch(PDO::FETCH_ASSOC);
-      } catch (PDOException $e) {
-         $footer_info = null;
-         error_log("Footer DB Error: " . $e->getMessage());
+      $footer_info = null;
+      // Chỉ truy vấn khi service khả dụng
+      if ($db->isServiceAvailable('content')) {
+         try {
+            $select_footer = $db->getConnection('content')->prepare("SELECT * FROM `footer` LIMIT 1");
+            $select_footer->execute();
+            $footer_info = $select_footer->fetch(PDO::FETCH_ASSOC);
+         } catch (PDOException $e) {
+            error_log("Footer DB Error: " . $e->getMessage());
+         }
       }
-
 
       if ($footer_info) {
          ?>

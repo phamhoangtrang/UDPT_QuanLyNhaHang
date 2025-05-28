@@ -43,34 +43,37 @@ if (isset($_GET['delete'])) {
    <!-- messages section starts  -->
 
    <section class="messages">
-
-      <h1 class="heading">messages</h1>
-
       <div class="box-container">
-
          <?php
-         $select_messages = $db->getConnection('content')->prepare("SELECT * FROM `messages`");
-         $select_messages->execute();
-         if ($select_messages->rowCount() > 0) {
-            while ($fetch_messages = $select_messages->fetch(PDO::FETCH_ASSOC)) {
-               ?>
-               <div class="box">
-                  <p> name : <span><?= $fetch_messages['name']; ?></span> </p>
-                  <p> number : <span><?= $fetch_messages['number']; ?></span> </p>
-                  <p> email : <span><?= $fetch_messages['email']; ?></span> </p>
-                  <p> message : <span><?= $fetch_messages['message']; ?></span> </p>
-                  <a href="messages.php?delete=<?= $fetch_messages['id']; ?>" class="delete-btn"
-                     onclick="return confirm('delete this message?');">delete</a>
-               </div>
-               <?php
+         if ($db->isServiceAvailable('content')) {
+            try {
+               $select_messages = $db->getConnection('content')->prepare("SELECT * FROM `messages`");
+               $select_messages->execute();
+               if ($select_messages->rowCount() > 0) {
+                  while ($fetch_messages = $select_messages->fetch(PDO::FETCH_ASSOC)) {
+                     ?>
+                     <div class="box">
+                        <p> name : <span><?= $fetch_messages['name']; ?></span> </p>
+                        <p> number : <span><?= $fetch_messages['number']; ?></span> </p>
+                        <p> email : <span><?= $fetch_messages['email']; ?></span> </p>
+                        <p> message : <span><?= $fetch_messages['message']; ?></span> </p>
+                        <a href="messages.php?delete=<?= $fetch_messages['id']; ?>" class="delete-btn"
+                           onclick="return confirm('delete this message?');">delete</a>
+                     </div>
+                     <?php
+                  }
+               } else {
+                  echo '<p class="empty">Chưa có tin nhắn nào!</p>';
+               }
+            } catch (PDOException $e) {
+               error_log("Content service error: " . $e->getMessage());
+               echo '<p class="empty">Không thể truy cập tin nhắn</p>';
             }
          } else {
-            echo '<p class="empty">you have no messages</p>';
+            echo '<p class="empty">Dịch vụ tin nhắn tạm thời không khả dụng</p>';
          }
          ?>
-
       </div>
-
    </section>
 
    <!-- messages section ends -->

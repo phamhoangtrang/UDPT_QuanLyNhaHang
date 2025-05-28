@@ -7,6 +7,42 @@ session_start();
 $_SESSION['admin_id'] = 1; // Giả định ID admin mặc định là 1
 $admin_id = $_SESSION['admin_id'];
 
+// Initialize default values
+$number_of_products = 0;
+$select_products = null;
+$number_of_orders = 0;
+$total_pendings = 0;
+$total_completed = 0;
+
+// Check product service
+if ($db->isServiceAvailable('product')) {
+   try {
+      $select_products = $db->getConnection('product')->prepare("SELECT * FROM `products`");
+      $select_products->execute();
+      $number_of_products = $select_products->rowCount();
+   } catch (PDOException $e) {
+      error_log("Product service error: " . $e->getMessage());
+   }
+}
+
+// Check order service
+if ($db->isServiceAvailable('order')) {
+   try {
+      $select_orders = $db->getConnection('order')->prepare("SELECT * FROM `orders`");
+      $select_orders->execute();
+      $number_of_orders = $select_orders->rowCount();
+
+      $total_pendings = $db->getConnection('order')->prepare("SELECT * FROM `orders` WHERE payment_status = ?");
+      $total_pendings->execute(['pending']);
+      $total_pendings = $total_pendings->rowCount();
+
+      $total_completed = $db->getConnection('order')->prepare("SELECT * FROM `orders` WHERE payment_status = ?");
+      $total_completed->execute(['completed']);
+      $total_completed = $total_completed->rowCount();
+   } catch (PDOException $e) {
+      error_log("Order service error: " . $e->getMessage());
+   }
+}
 ?>
 
 <!DOCTYPE html>
@@ -45,53 +81,33 @@ $admin_id = $_SESSION['admin_id'];
          </div>
 
          <div class="box">
-            <?php
-            $total_pendings = 0;
-            $select_pendings = $db->getConnection('order')->prepare("SELECT * FROM `orders` WHERE payment_status = ?");
-            $select_pendings->execute(['pending']);
-            while ($fetch_pendings = $select_pendings->fetch(PDO::FETCH_ASSOC)) {
-               $total_pendings += $fetch_pendings['total_price'];
-            }
-            ?>
             <h3><span>$</span><?= number_format($total_pendings, 2); ?><span>/-</span></h3>
             <p>Total Pendings</p>
             <a href="placed_orders.php" class="btn">See Orders</a>
          </div>
 
          <div class="box">
-            <?php
-            $total_completes = 0;
-            $select_completes = $db->getConnection('order')->prepare("SELECT * FROM `orders` WHERE payment_status = ?");
-            $select_completes->execute(['completed']);
-            while ($fetch_completes = $select_completes->fetch(PDO::FETCH_ASSOC)) {
-               $total_completes += $fetch_completes['total_price'];
-            }
-            ?>
-            <h3><span>$</span><?= number_format($total_completes, 2); ?><span>/-</span></h3>
+            <h3><span>$</span><?= number_format($total_completed, 2); ?><span>/-</span></h3>
             <p>Total Completes</p>
             <a href="placed_orders.php" class="btn">See Orders</a>
          </div>
 
          <div class="box">
-            <?php
-            $select_orders = $db->getConnection('order')->prepare("SELECT * FROM `orders`");
-            $select_orders->execute();
-            $numbers_of_orders = $select_orders->rowCount();
-            ?>
-            <h3><?= $numbers_of_orders; ?></h3>
+            <h3><?= $number_of_orders; ?></h3>
             <p>Total Orders</p>
             <a href="placed_orders.php" class="btn">See Orders</a>
          </div>
 
          <div class="box">
-            <?php
-            $select_products = $db->getConnection('product')->prepare("SELECT * FROM `products`");
-            $select_products->execute();
-            $numbers_of_products = $select_products->rowCount();
-            ?>
-            <h3><?= $numbers_of_products; ?></h3>
-            <p>Products Added</p>
-            <a href="products.php" class="btn">See Products</a>
+            <?php if ($select_products): ?>
+               <h3><?= $number_of_products; ?></h3>
+               <p>Products Added</p>
+               <a href="products.php" class="btn">See Products</a>
+            <?php else: ?>
+               <h3>0</h3>
+               <p>Products Added</p>
+               <a href="products.php" class="btn">See Products</a>
+            <?php endif; ?>
          </div>
 
          <div class="box">
@@ -118,11 +134,19 @@ $admin_id = $_SESSION['admin_id'];
 
          <div class="box">
             <?php
-            $select_messages = $db->getConnection('content')->prepare("SELECT * FROM `messages`");
-            $select_messages->execute();
-            $numbers_of_messages = $select_messages->rowCount();
+            // Kiểm tra service trước khi truy vấn
+            if ($db->isServiceAvailable('content')) {
+               try {
+                  $select_messages = $db->getConnection('content')->prepare("SELECT * FROM `messages`");
+                  $select_messages->execute();
+                  $number_of_messages = $select_messages->rowCount();
+               } catch (PDOException $e) {
+                  $number_of_messages = 0;
+                  error_log("Dashboard Messages Error: " . $e->getMessage());
+               }
+            }
             ?>
-            <h3><?= $numbers_of_messages; ?></h3>
+            <h3><?= $number_of_messages; ?></h3>
             <p>New Messages</p>
             <a href="messages.php" class="btn">See Messages</a>
          </div>

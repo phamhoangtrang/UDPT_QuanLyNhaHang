@@ -10,9 +10,29 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 $message = [];
 
-// Update all table queries to use order service
-$select_tables = $db->getConnection('order')->prepare("SELECT * FROM `tables` WHERE status = 'available'");
-$select_tables->execute();
+// Kiểm tra reservation service có khả dụng không
+if (!$db->isServiceAvailable('reservation')) {
+    $message[] = 'Dịch vụ đặt bàn tạm thời không khả dụng';
+} else {
+    try {
+        // Update all table queries to use reservation service
+        $select_tables = $db->getConnection('reservation')->prepare("SELECT * FROM `tables` WHERE status = 'available'");
+        $select_tables->execute();
+
+        // Get user's reserved tables
+        $select_reserved_tables = $db->getConnection('reservation')->prepare("
+            SELECT r.*, t.table_number, t.capacity 
+            FROM `reservations` r 
+            INNER JOIN `tables` t ON r.table_id = t.id 
+            WHERE r.user_id = ?
+            ORDER BY r.reservation_time DESC
+        ");
+        $select_reserved_tables->execute([$user_id]);
+    } catch (PDOException $e) {
+        error_log("Reservation service error: " . $e->getMessage());
+        $message[] = 'Không thể truy cập thông tin bàn';
+    }
+}
 
 // Handle table reservation
 if (isset($_POST['submit'])) { // Thay đổi điều kiện kiểm tra
@@ -90,15 +110,6 @@ if (isset($_SESSION['reservation_success']) && $_SESSION['reservation_success'] 
     $message[] = 'Table reservation successful!';
     unset($_SESSION['reservation_success']);
 }
-
-$select_reserved_tables = $db->getConnection('order')->prepare("
-    SELECT r.*, t.table_number, t.capacity 
-    FROM `reservations` r 
-    INNER JOIN `tables` t ON r.table_id = t.id 
-    WHERE r.user_id = ?
-    ORDER BY r.reservation_time DESC
-");
-$select_reserved_tables->execute([$user_id]);
 ?>
 
 <!DOCTYPE html>
@@ -142,83 +153,90 @@ $select_reserved_tables->execute([$user_id]);
         <p><a href="home.php">Home</a> <span> / Reserve Table</span></p>
     </div>
 
-    <section class="reserve-table">
+    <?php if ($db->isServiceAvailable('reservation')): ?>
+        <section class="reserve-table">
 
-        <?php
-        if (!isset($message) || !is_array($message)) {
-            $message = [];
-        }
+            <?php
+            if (!isset($message) || !is_array($message)) {
+                $message = [];
+            }
 
-        if (!empty($message)): ?>
-            <div class="message">
-                <?php foreach ($message as $msg): ?>
-                    <p><?= $msg; ?></p>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
+            if (!empty($message)): ?>
+                <div class="message">
+                    <?php foreach ($message as $msg): ?>
+                        <p><?= $msg; ?></p>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
 
-        <form action="" method="POST" class="form-container">
-            <label for="table">Choose a table:</label>
-            <select name="table_id" required class="box">
-                <?php if ($select_tables->rowCount() > 0): ?>
-                    <?php while ($table = $select_tables->fetch(PDO::FETCH_ASSOC)): ?>
-                        <option value="<?= htmlspecialchars($table['id']); ?>">Table Number
-                            <?= htmlspecialchars($table['table_number']); ?> (Capacity:
-                            <?= htmlspecialchars($table['capacity']); ?>)
-                        </option>
-                    <?php endwhile; ?>
-                <?php else: ?>
-                    <option value="">No available tables</option>
-                <?php endif; ?>
-            </select>
-            <input type="text" name="name" placeholder="Enter your name" required class="box">
-            <input type="text" name="phone" placeholder="Enter your phone number" required class="box">
-            <input type="datetime-local" name="reservation_time" required class="box">
-            <input type="submit" name="submit" value="Reserve Table" class="btn" <?= ($select_tables->rowCount() == 0) ? 'disabled' : ''; ?>>
-        </form>
+            <form action="" method="POST" class="form-container">
+                <label for="table">Choose a table:</label>
+                <select name="table_id" required class="box">
+                    <?php if ($select_tables->rowCount() > 0): ?>
+                        <?php while ($table = $select_tables->fetch(PDO::FETCH_ASSOC)): ?>
+                            <option value="<?= htmlspecialchars($table['id']); ?>">Table Number
+                                <?= htmlspecialchars($table['table_number']); ?> (Capacity:
+                                <?= htmlspecialchars($table['capacity']); ?>)
+                            </option>
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <option value="">No available tables</option>
+                    <?php endif; ?>
+                </select>
+                <input type="text" name="name" placeholder="Enter your name" required class="box">
+                <input type="text" name="phone" placeholder="Enter your phone number" required class="box">
+                <input type="datetime-local" name="reservation_time" required class="box">
+                <input type="submit" name="submit" value="Reserve Table" class="btn" <?= ($select_tables->rowCount() == 0) ? 'disabled' : ''; ?>>
+            </form>
 
-    </section>
+        </section>
 
-    <section class="reserved-tables">
-        <h3>Your booked table</h3>
-        <?php if ($select_reserved_tables->rowCount() > 0): ?>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Table Number</th>
-                        <th>Capacity</th>
-                        <th>Name</th>
-                        <th>Phone Number</th>
-                        <th>Reservation Time</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php while ($reserved_table = $select_reserved_tables->fetch(PDO::FETCH_ASSOC)): ?>
+        <section class="reserved-tables">
+            <h3>Your booked table</h3>
+            <?php if ($select_reserved_tables->rowCount() > 0): ?>
+                <table>
+                    <thead>
                         <tr>
-                            <td><?= htmlspecialchars($reserved_table['table_number']); ?></td>
-                            <td><?= htmlspecialchars($reserved_table['capacity']); ?></td>
-                            <td><?= htmlspecialchars($reserved_table['name']); ?></td>
-                            <td><?= htmlspecialchars($reserved_table['phone']); ?></td>
-                            <td><?= htmlspecialchars($reserved_table['reservation_time']); ?></td>
-                            <td>
-                                <form action="" method="POST"
-                                    onsubmit="return confirm('Are you sure you want to cancel this reservation?');">
-                                    <input type="hidden" name="reservation_id" value="<?= $reserved_table['id']; ?>">
-                                    <input type="hidden" name="table_id" value="<?= $reserved_table['table_id']; ?>">
-                                    <button type="submit" name="delete_reservation" class="delete-btn">
-                                        <i class="fas fa-trash"></i> Cancel
-                                    </button>
-                                </form>
-                            </td>
+                            <th>Table Number</th>
+                            <th>Capacity</th>
+                            <th>Name</th>
+                            <th>Phone Number</th>
+                            <th>Reservation Time</th>
+                            <th>Action</th>
                         </tr>
-                    <?php endwhile; ?>
-                </tbody>
-            </table>
-        <?php else: ?>
-            <p style="font-size: 250%; padding-left: 38%;">You have not reserved any tables.</p>
-        <?php endif; ?>
-    </section>
+                    </thead>
+                    <tbody>
+                        <?php while ($reserved_table = $select_reserved_tables->fetch(PDO::FETCH_ASSOC)): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($reserved_table['table_number']); ?></td>
+                                <td><?= htmlspecialchars($reserved_table['capacity']); ?></td>
+                                <td><?= htmlspecialchars($reserved_table['name']); ?></td>
+                                <td><?= htmlspecialchars($reserved_table['phone']); ?></td>
+                                <td><?= htmlspecialchars($reserved_table['reservation_time']); ?></td>
+                                <td>
+                                    <form action="" method="POST"
+                                        onsubmit="return confirm('Are you sure you want to cancel this reservation?');">
+                                        <input type="hidden" name="reservation_id" value="<?= $reserved_table['id']; ?>">
+                                        <input type="hidden" name="table_id" value="<?= $reserved_table['table_id']; ?>">
+                                        <button type="submit" name="delete_reservation" class="delete-btn">
+                                            <i class="fas fa-trash"></i> Cancel
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <?php endwhile; ?>
+                    </tbody>
+                </table>
+            <?php else: ?>
+                <p style="font-size: 250%; padding-left: 38%;">You have not reserved any tables.</p>
+            <?php endif; ?>
+        </section>
+    <?php else: ?>
+        <div class="notice">
+            <p>Dịch vụ đặt bàn tạm thời không khả dụng</p>
+            <p>Vui lòng thử lại sau</p>
+        </div>
+    <?php endif; ?>
 
     <?php include 'components/footer.php'; ?>
 

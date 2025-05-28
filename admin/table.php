@@ -11,12 +11,21 @@ if (!isset($admin_id)) {
 
 // Handle adding a new table
 if (isset($_POST['add_table'])) {
-    $table_number = $_POST['table_number'];
-    $capacity = $_POST['capacity'];
+    if (!$db->isServiceAvailable('reservation')) {
+        $message[] = 'Dịch vụ quản lý bàn tạm thời không khả dụng';
+    } else {
+        try {
+            $table_number = $_POST['table_number'];
+            $capacity = $_POST['capacity'];
 
-    $insert_table = $db->getConnection('order')->prepare("INSERT INTO `tables` (table_number, capacity, status) VALUES (?, ?, 'available')");
-    $insert_table->execute([$table_number, $capacity]);
-    $message[] = 'New table has been added!';
+            $insert_table = $db->getConnection('reservation')->prepare("INSERT INTO `tables` (table_number, capacity, status) VALUES (?, ?, 'available')");
+            $insert_table->execute([$table_number, $capacity]);
+            $message[] = 'Thêm bàn mới thành công!';
+        } catch (PDOException $e) {
+            error_log("Table management error: " . $e->getMessage());
+            $message[] = 'Không thể thêm bàn - Lỗi hệ thống';
+        }
+    }
 }
 
 // Handle deleting a table
@@ -59,40 +68,48 @@ if (isset($message)) {
     <!-- Manage tables section starts -->
 
     <section class="manage-tables">
+        <?php if ($db->isServiceAvailable('reservation')): ?>
+            <h1 class="heading">Manage Tables</h1>
 
-        <h1 class="heading">Manage Tables</h1>
+            <form action="" method="POST">
+                <input type="text" name="table_number" placeholder="Table Number" required class="box">
+                <input type="number" name="capacity" placeholder="Capacity" required class="box">
+                <input type="submit" name="add_table" value="Add Table" class="btn">
+            </form>
 
-        <form action="" method="POST">
-            <input type="text" name="table_number" placeholder="Table Number" required class="box">
-            <input type="number" name="capacity" placeholder="Capacity" required class="box">
-            <input type="submit" name="add_table" value="Add Table" class="btn">
-        </form>
-
-        <div class="box-container">
-
-            <?php
-            $select_tables = $db->getConnection('order')->prepare("SELECT * FROM `tables`");
-            $select_tables->execute();
-            if ($select_tables->rowCount() > 0) {
-                while ($fetch_table = $select_tables->fetch(PDO::FETCH_ASSOC)) {
-                    ?>
-                    <div class="box">
-                        <p> Table Number: <span><?= $fetch_table['table_number']; ?></span> </p>
-                        <p> Capacity: <span><?= $fetch_table['capacity']; ?></span> </p>
-                        <p> Status: <span><?= $fetch_table['status']; ?></span> </p>
-                        <a href="edit_table.php?id=<?= $fetch_table['id']; ?>" class="btn">Edit</a>
-                        <a href="table.php?delete=<?= $fetch_table['id']; ?>" class="delete-btn"
-                            onclick="return confirm('Are you sure you want to delete this table?');">Delete</a>
-                    </div>
-                    <?php
+            <div class="box-container">
+                <?php
+                try {
+                    $select_tables = $db->getConnection('reservation')->prepare("SELECT * FROM `tables`");
+                    $select_tables->execute();
+                    if ($select_tables->rowCount() > 0) {
+                        while ($fetch_table = $select_tables->fetch(PDO::FETCH_ASSOC)) {
+                            ?>
+                            <div class="box">
+                                <p> Table Number: <span><?= $fetch_table['table_number']; ?></span> </p>
+                                <p> Capacity: <span><?= $fetch_table['capacity']; ?></span> </p>
+                                <p> Status: <span><?= $fetch_table['status']; ?></span> </p>
+                                <a href="edit_table.php?id=<?= $fetch_table['id']; ?>" class="btn">Edit</a>
+                                <a href="table.php?delete=<?= $fetch_table['id']; ?>" class="delete-btn"
+                                    onclick="return confirm('Are you sure you want to delete this table?');">Delete</a>
+                            </div>
+                            <?php
+                        }
+                    } else {
+                        echo '<p class="empty">Chưa có bàn nào!</p>';
+                    }
+                } catch (PDOException $e) {
+                    error_log("Table display error: " . $e->getMessage());
+                    echo '<p class="empty">Không thể truy cập thông tin bàn</p>';
                 }
-            } else {
-                echo '<p class="empty">No tables found!</p>';
-            }
-            ?>
-
-        </div>
-
+                ?>
+            </div>
+        <?php else: ?>
+            <div class="notice">
+                <p>Dịch vụ quản lý bàn tạm thời không khả dụng</p>
+                <p>Vui lòng thử lại sau</p>
+            </div>
+        <?php endif; ?>
     </section>
 
     <!-- Manage tables section ends -->

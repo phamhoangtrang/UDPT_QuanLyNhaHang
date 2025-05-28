@@ -14,39 +14,43 @@ if (!isset($admin_id)) {
 ;
 
 if (isset($_POST['add_product'])) {
-
-   $name = $_POST['name'];
-   $name = filter_var($name, FILTER_SANITIZE_SPECIAL_CHARS);
-   $price = $_POST['price'];
-   $price = filter_var($price, FILTER_SANITIZE_SPECIAL_CHARS);
-   $category = $_POST['category'];
-   $category = filter_var($category, FILTER_SANITIZE_SPECIAL_CHARS);
-
-   $image = $_FILES['image']['name'];
-   $image = filter_var($image, FILTER_SANITIZE_SPECIAL_CHARS);
-   $image_size = $_FILES['image']['size'];
-   $image_tmp_name = $_FILES['image']['tmp_name'];
-   $image_folder = '../uploaded_img/' . $image;
-
-   $select_products = $db->getConnection('product')->prepare("SELECT * FROM `products` WHERE name = ?");
-   $select_products->execute([$name]);
-
-   if ($select_products->rowCount() > 0) {
-      $message[] = 'product name already exists!';
+   if (!$db->isServiceAvailable('product')) {
+      $message[] = 'Cannot add product - Service temporarily unavailable';
    } else {
-      if ($image_size > 2000000) {
-         $message[] = 'image size is too large';
-      } else {
-         move_uploaded_file($image_tmp_name, $image_folder);
+      try {
+         $name = $_POST['name'];
+         $name = filter_var($name, FILTER_SANITIZE_SPECIAL_CHARS);
+         $category = $_POST['category'];
+         $category = filter_var($category, FILTER_SANITIZE_SPECIAL_CHARS);
+         $price = $_POST['price'];
+         $price = filter_var($price, FILTER_SANITIZE_SPECIAL_CHARS);
 
-         $insert_product = $db->getConnection('product')->prepare("INSERT INTO `products`(name, category, price, image) VALUES(?, ?, ?, ?)");
-         $insert_product->execute([$name, $category, $price, $image]);
+         $image = $_FILES['image']['name'];
+         $image = filter_var($image, FILTER_SANITIZE_SPECIAL_CHARS);
+         $image_size = $_FILES['image']['size'];
+         $image_tmp_name = $_FILES['image']['tmp_name'];
+         $image_folder = '../uploaded_img/' . $image;
 
-         $message[] = 'new product added!';
+         $select_products = $db->getConnection('product')->prepare("SELECT * FROM `products` WHERE name = ?");
+         $select_products->execute([$name]);
+
+         if ($select_products->rowCount() > 0) {
+            $message[] = 'Product name already exists!';
+         } else {
+            if ($image_size > 2000000) {
+               $message[] = 'Image size is too large';
+            } else {
+               $insert_product = $db->getConnection('product')->prepare("INSERT INTO `products`(name, category, price, image) VALUES(?, ?, ?, ?)");
+               $insert_product->execute([$name, $category, $price, $image]);
+               move_uploaded_file($image_tmp_name, $image_folder);
+               $message[] = 'New product added!';
+            }
+         }
+      } catch (PDOException $e) {
+         error_log("Product service error: " . $e->getMessage());
+         $message[] = 'Cannot add product - System error';
       }
-
    }
-
 }
 
 if (isset($_GET['delete'])) {
@@ -116,33 +120,42 @@ ob_end_flush();
 
    <!-- show products section starts  -->
 
-   <section class="show-products" style="padding-top: 0;">
+   <section class="show-products">
 
       <div class="box-container">
 
          <?php
-         $show_products = $db->getConnection('product')->prepare("SELECT * FROM `products`");
-         $show_products->execute();
-         if ($show_products->rowCount() > 0) {
-            while ($fetch_products = $show_products->fetch(PDO::FETCH_ASSOC)) {
-               ?>
-               <div class="box">
-                  <img src="../uploaded_img/<?= $fetch_products['image']; ?>" alt="">
-                  <div class="flex">
-                     <div class="price"><span>$</span><?= $fetch_products['price']; ?><span>/-</span></div>
-                     <div class="category"><?= $fetch_products['category']; ?></div>
-                  </div>
-                  <div class="name"><?= $fetch_products['name']; ?></div>
-                  <div class="flex-btn">
-                     <a href="update_product.php?update=<?= $fetch_products['id']; ?>" class="option-btn">update</a>
-                     <a href="products.php?delete=<?= $fetch_products['id']; ?>" class="delete-btn"
-                        onclick="return confirm('delete this product?');">delete</a>
-                  </div>
-               </div>
-               <?php
+         if ($db->isServiceAvailable('product')) {
+            try {
+               $select_products = $db->getConnection('product')->prepare("SELECT * FROM `products`");
+               $select_products->execute();
+               if ($select_products->rowCount() > 0) {
+                  while ($fetch_products = $select_products->fetch(PDO::FETCH_ASSOC)) {
+                     ?>
+                     <div class="box">
+                        <img src="../uploaded_img/<?= $fetch_products['image']; ?>" alt="">
+                        <div class="flex">
+                           <div class="price"><span>$</span><?= $fetch_products['price']; ?><span>/-</span></div>
+                           <div class="category"><?= $fetch_products['category']; ?></div>
+                        </div>
+                        <div class="name"><?= $fetch_products['name']; ?></div>
+                        <div class="flex-btn">
+                           <a href="update_product.php?update=<?= $fetch_products['id']; ?>" class="option-btn">update</a>
+                           <a href="products.php?delete=<?= $fetch_products['id']; ?>" class="delete-btn"
+                              onclick="return confirm('delete this product?');">delete</a>
+                        </div>
+                     </div>
+                     <?php
+                  }
+               } else {
+                  echo '<p class="empty">no products added yet!</p>';
+               }
+            } catch (PDOException $e) {
+               error_log("Product service error: " . $e->getMessage());
+               echo '<p class="empty">Cannot access products at the moment</p>';
             }
          } else {
-            echo '<p class="empty">no products added yet!</p>';
+            echo '<p class="empty">Product service is currently unavailable</p>';
          }
          ?>
 
@@ -151,16 +164,6 @@ ob_end_flush();
    </section>
 
    <!-- show products section ends -->
-
-
-
-
-
-
-
-
-
-
    <!-- custom js file link  -->
    <script src="../js/admin_script.js"></script>
 

@@ -52,70 +52,78 @@ if (isset($_GET['delete'])) {
 
    <!-- Placed orders section starts -->
    <section class="placed-orders">
+      <h1 class="heading">Đơn hàng</h1>
 
-      <h1 class="heading">Placed Orders</h1>
+      <?php if ($db->isServiceAvailable('order')): ?>
+         <div class="box-container">
+            <?php
+            try {
+               $select_orders = $db->getConnection('order')->prepare("SELECT * FROM `orders` ORDER BY placed_on DESC");
+               $select_orders->execute();
+               if ($select_orders->rowCount() > 0) {
+                  while ($fetch_orders = $select_orders->fetch(PDO::FETCH_ASSOC)) {
+                     ?>
+                     <div class="box">
+                        <p> User ID: <span><?= $fetch_orders['user_id']; ?></span> </p>
+                        <p> Placed On: <span><?= $fetch_orders['placed_on']; ?></span> </p>
+                        <p> Name: <span><?= $fetch_orders['name']; ?></span> </p>
+                        <p> Payment Method: <span><?= $fetch_orders['method']; ?></span> </p>
+                        <p> Total Products: <span><?= $fetch_orders['total_products']; ?></span> </p>
+                        <p> Total Price: <span>$<?= $fetch_orders['total_price']; ?>/-</span> </p>
+                        <p> Payment Status: <span
+                              style="color: <?= ($fetch_orders['payment_status'] == 'pending') ? 'red' : 'green'; ?>"><?= htmlspecialchars($fetch_orders['payment_status']); ?></span>
+                        </p>
 
-      <div class="box-container">
+                        <?php if ($fetch_orders['dining_option'] == 'dine_in'): ?>
+                           <?php
+                           $order_db = $db->getConnection('order');
+                           $select_table = $order_db->prepare("
+                              SELECT t.table_number 
+                              FROM `reservations` r 
+                              JOIN `tables` t ON r.table_id = t.id 
+                              WHERE r.order_id = ?
+                           ");
+                           $select_table->execute([$fetch_orders['id']]);
+                           $fetch_table = $select_table->fetchAll(PDO::FETCH_ASSOC);
+                           if (count($fetch_table) > 0): // Kiểm tra xem có bàn nào không
+                              ?>
+                              <p> Table Number: <span><?= implode(', ', array_column($fetch_table, 'table_number')); ?></span> </p>
+                           <?php else: ?>
+                              <p> Table Number: <span>Not assigned</span> </p>
+                           <?php endif; ?>
+                        <?php endif; ?>
 
-         <?php
-         $select_orders = $db->getConnection('order')->prepare("SELECT * FROM `orders`");
-         $select_orders->execute();
-         if ($select_orders->rowCount() > 0) {
-            while ($fetch_orders = $select_orders->fetch(PDO::FETCH_ASSOC)) {
-               ?>
-               <div class="box">
-                  <p> User ID: <span><?= $fetch_orders['user_id']; ?></span> </p>
-                  <p> Placed On: <span><?= $fetch_orders['placed_on']; ?></span> </p>
-                  <p> Name: <span><?= $fetch_orders['name']; ?></span> </p>
-                  <p> Payment Method: <span><?= $fetch_orders['method']; ?></span> </p>
-                  <p> Total Products: <span><?= $fetch_orders['total_products']; ?></span> </p>
-                  <p> Total Price: <span>$<?= $fetch_orders['total_price']; ?>/-</span> </p>
-                  <p> Payment Status: <span
-                        style="color: <?= ($fetch_orders['payment_status'] == 'pending') ? 'red' : 'green'; ?>"><?= htmlspecialchars($fetch_orders['payment_status']); ?></span>
-                  </p>
-
-                  <?php if ($fetch_orders['dining_option'] == 'dine_in'): ?>
-                     <?php
-                     $order_db = $db->getConnection('order');
-                     $select_table = $order_db->prepare("
-                        SELECT t.table_number 
-                        FROM `reservations` r 
-                        JOIN `tables` t ON r.table_id = t.id 
-                        WHERE r.order_id = ?
-                     ");
-                     $select_table->execute([$fetch_orders['id']]);
-                     $fetch_table = $select_table->fetchAll(PDO::FETCH_ASSOC);
-                     if (count($fetch_table) > 0): // Kiểm tra xem có bàn nào không
-                        ?>
-                        <p> Table Number: <span><?= implode(', ', array_column($fetch_table, 'table_number')); ?></span> </p>
-                     <?php else: ?>
-                        <p> Table Number: <span>Not assigned</span> </p>
-                     <?php endif; ?>
-                  <?php endif; ?>
-
-                  <form action="" method="POST">
-                     <input type="hidden" name="order_id" value="<?= $fetch_orders['id']; ?>">
-                     <select name="payment_status" class="drop-down">
-                        <option value="" selected disabled><?= $fetch_orders['payment_status']; ?></option>
-                        <option value="pending">Pending</option>
-                        <option value="completed">Completed</option>
-                     </select>
-                     <div class="flex-btn">
-                        <input type="submit" value="Update" class="btn" name="update_payment">
-                        <a href="placed_orders.php?delete=<?= $fetch_orders['id']; ?>" class="delete-btn"
-                           onclick="return confirm('Delete this order?');">Delete</a>
+                        <form action="" method="POST">
+                           <input type="hidden" name="order_id" value="<?= $fetch_orders['id']; ?>">
+                           <select name="payment_status" class="drop-down">
+                              <option value="" selected disabled><?= $fetch_orders['payment_status']; ?></option>
+                              <option value="pending">Pending</option>
+                              <option value="completed">Completed</option>
+                           </select>
+                           <div class="flex-btn">
+                              <input type="submit" value="Update" class="btn" name="update_payment">
+                              <a href="placed_orders.php?delete=<?= $fetch_orders['id']; ?>" class="delete-btn"
+                                 onclick="return confirm('Delete this order?');">Delete</a>
+                           </div>
+                        </form>
                      </div>
-                  </form>
-               </div>
-               <?php
+                     <?php
+                  }
+               } else {
+                  echo '<p class="empty">Chưa có đơn hàng nào!</p>';
+               }
+            } catch (PDOException $e) {
+               error_log("Order service error: " . $e->getMessage());
+               echo '<p class="empty">Không thể truy cập đơn hàng</p>';
             }
-         } else {
-            echo '<p class="empty">No orders placed yet!</p>';
-         }
-         ?>
-
-      </div>
-
+            ?>
+         </div>
+      <?php else: ?>
+         <div class="notice">
+            <p>Dịch vụ đơn hàng tạm thời không khả dụng</p>
+            <p>Vui lòng thử lại sau</p>
+         </div>
+      <?php endif; ?>
    </section>
    <!-- Placed orders section ends -->
 

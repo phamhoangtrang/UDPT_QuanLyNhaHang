@@ -278,6 +278,11 @@ section {
   pointer-events: none;
 }
 
+.btn.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .message {
   position: sticky;
   top: 0;
@@ -1497,4 +1502,14 @@ section {
     flex-flow: column;
     gap: 0;
   }
+}
+
+.notice {
+  background: #fff3cd;
+  color: #856404;
+  padding: 10px;
+  text-align: center;
+  font-size: 14px;
+  border-radius: 5px;
+  margin: 10px 0;
 }
